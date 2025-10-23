@@ -16,10 +16,14 @@
     .row { display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap; }
     input[type="text"] { font-size:1.3rem; padding:10px 14px; width: 240px; border-radius:12px; border:1px solid #333; background:#181818; color:#fff; text-align:center; }
     button { padding:10px 16px; border:none; border-radius:12px; background:#2a2a2a; color:#fff; font-size:1rem; }
+    button.secondary { background:#444; }
+    button.warn { background:#8a2a2a; }
     button:active { transform:scale(0.98); }
     #reader { width: min(92vw, 420px); margin: 0 auto; }
     #status { font-weight:600; min-height: 1.6em; }
-    table { width:min(92vw, 640px); border-collapse: collapse; margin-top:8px; background:#111; }
+    #refBox { background:#111; padding:8px 12px; border-radius:12px; border:1px solid #222; }
+    #refValue { font-weight:700; }
+    table { width:min(92vw, 680px); border-collapse: collapse; margin-top:8px; background:#111; }
     th, td { border-bottom: 1px solid #222; padding: 8px; font-size: 0.95rem; text-align:left; }
     th { position:sticky; top:0; background:#0f0f0f; }
     .ok { color:#00e676; }
@@ -31,12 +35,19 @@
 <body>
   <header>
     <h1 style="margin:6px 0;">QR OK NOK</h1>
-    <div style="font-size:0.95rem; opacity:0.8;">Porównaj zeskanowany QR z numerem wpisanym poniżej</div>
+    <div style="font-size:0.95rem; opacity:0.8;">Porównaj zeskanowany QR ze wzorcem (zeskanuj lub wpisz ręcznie)</div>
   </header>
 
   <div id="app">
+    <div id="refBox" class="row" style="gap:12px;">
+      <div>Wzorzec: <span id="refValue">— brak —</span></div>
+      <button id="scanRefBtn" class="secondary" title="Zeskanuj kod wzorcowy">Ustaw wzorzec (skanuj)</button>
+      <button id="clearRefBtn" class="warn" title="Usuń kod wzorcowy" disabled>Usuń wzorzec</button>
+    </div>
+
     <div class="row">
-      <input id="inputValue" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="Wpisz numer...">
+      <input id="inputValue" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="Lub wpisz wzorzec ręcznie…">
+      <button id="applyManualRefBtn" class="secondary">Ustaw z wpisu</button>
       <button id="clearInputBtn" title="Wyczyść">Wyczyść</button>
       <button id="toggleBtn">Zatrzymaj skanowanie</button>
     </div>
@@ -44,7 +55,7 @@
     <div id="reader"></div>
     <div id="status">Oczekiwanie na skan…</div>
 
-    <div style="width:min(92vw,640px);display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+    <div style="width:min(92vw,680px);display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
       <strong>Historia skanów (lokalnie)</strong>
       <div class="row">
         <button id="clearHistoryBtn">Wyczyść historię</button>
@@ -55,7 +66,7 @@
         <thead>
           <tr>
             <th style="width:26%;">Data i czas</th>
-            <th style="width:22%;">Wpisany numer</th>
+            <th style="width:22%;">Wzorzec użyty</th>
             <th style="width:30%;">Zeskanowana wartość</th>
             <th style="width:22%;">Wynik</th>
           </tr>
@@ -68,7 +79,6 @@
   <footer>© QR OK NOK — działa offline po pierwszym uruchomieniu</footer>
 
   <script>
-    // ====== UTIL: dźwięk + flash ======
     function beep(duration = 200, frequency = 600, volume = 0.8) {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -87,59 +97,54 @@
       setTimeout(()=> body.style.backgroundColor = prev || "#0e0e0e", duration);
     }
 
-    // ====== Historia w localStorage ======
-    const HISTORY_KEY = "qr_ok_nok_history_v1";
-    function loadHistory() {
-      try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
-      catch(_) { return []; }
-    }
-    function saveHistory(hist) {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(-500))); // limit 500 wpisów
-    }
-    function addHistory(entry) {
-      const hist = loadHistory();
-      hist.push(entry);
-      saveHistory(hist);
-      renderHistory();
-    }
-    function clearHistory() {
-      localStorage.removeItem(HISTORY_KEY);
-      renderHistory();
+    const HISTORY_KEY = "qr_ok_nok_history_v2";
+    const REF_KEY = "qr_ok_nok_reference";
+    function loadHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch(_) { return []; } }
+    function saveHistory(hist) { localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(-500))); }
+    function addHistory(entry) { const hist = loadHistory(); hist.push(entry); saveHistory(hist); renderHistory(); }
+    function clearHistory() { localStorage.removeItem(HISTORY_KEY); renderHistory(); }
+    function getRef() { return localStorage.getItem(REF_KEY) || ""; }
+    function setRef(val) { if (val) localStorage.setItem(REF_KEY, val); updateRefUI(); }
+    function clearRef() { localStorage.removeItem(REF_KEY); updateRefUI(); }
+    function updateRefUI() {
+      const ref = getRef();
+      document.getElementById("refValue").textContent = ref ? ref : "— brak —";
+      document.getElementById("clearRefBtn").disabled = !ref;
     }
     function renderHistory() {
       const tbody = document.querySelector("#historyTable tbody");
       tbody.innerHTML = "";
-      const hist = loadHistory().slice().reverse(); // najnowsze na górze
+      const hist = loadHistory().slice().reverse();
       for (const h of hist) {
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${h.time}</td>
-          <td>${escapeHtml(h.inputValue)}</td>
+          <td>${escapeHtml(h.ref)}</td>
           <td>${escapeHtml(h.decoded)}</td>
           <td class="${h.match ? 'ok' : 'nok'}">${h.match ? 'OK' : 'NOK'}</td>
         `;
         tbody.appendChild(tr);
       }
     }
-    function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-    }
+    function escapeHtml(s) { return String(s||"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
-    // ====== QR skanowanie ======
     let html5QrCode = null;
     let scanning = false;
+    let settingRefMode = false;
     const statusEl = document.getElementById("status");
     const inputEl = document.getElementById("inputValue");
     const toggleBtn = document.getElementById("toggleBtn");
     const clearInputBtn = document.getElementById("clearInputBtn");
     const clearHistoryBtn = document.getElementById("clearHistoryBtn");
+    const scanRefBtn = document.getElementById("scanRefBtn");
+    const clearRefBtn = document.getElementById("clearRefBtn");
+    const applyManualRefBtn = document.getElementById("applyManualRefBtn");
 
     async function startScan() {
       try {
         if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
         const devices = await Html5Qrcode.getCameras();
         if (!devices || !devices.length) throw new Error("Nie znaleziono kamery");
-        // wybierz tylną jeśli dostępna
         const back = devices.find(d => /back|rear|tył/i.test(d.label)) || devices[0];
         await html5QrCode.start(back.id, { fps: 10, qrbox: 260 }, onScan);
         scanning = true;
@@ -150,23 +155,29 @@
       }
     }
     async function stopScan() {
-      try {
-        if (html5QrCode && scanning) await html5QrCode.stop();
-      } catch(_) {}
+      try { if (html5QrCode && scanning) await html5QrCode.stop(); } catch(_) {}
       scanning = false;
       toggleBtn.textContent = "Wznów skanowanie";
       statusEl.textContent = "Skanowanie zatrzymane";
     }
 
     function onScan(decodedText) {
-      const input = inputEl.value.trim();
-      if (!input) {
-        statusEl.textContent = "Wpisz numer przed skanowaniem!";
+      if (settingRefMode) {
+        setRef(decodedText);
+        flash("#00c853", 250);
+        beep(200, 900);
+        statusEl.textContent = `✅ Ustawiono wzorzec: ${decodedText}`;
+        settingRefMode = false;
+        return;
+      }
+      const ref = getRef() || inputEl.value.trim();
+      if (!ref) {
+        statusEl.textContent = "Ustaw wzorzec: zeskanuj lub wpisz ręcznie.";
         flash("#ffb300", 300);
         beep(120, 440);
         return;
       }
-      const match = decodedText === input;
+      const match = decodedText === ref;
       if (match) {
         flash("#00c853", 250);
         beep(200, 900);
@@ -176,24 +187,32 @@
         beep(1500, 300);
         statusEl.textContent = `❌ NOK — niezgodne (QR: ${decodedText})`;
       }
-      // dodaj do historii
       const now = new Date();
-      const time = now.toLocaleString();
-      addHistory({ time, inputValue: input, decoded: decodedText, match });
+      addHistory({ time: now.toLocaleString(), ref, decoded: decodedText, match });
     }
 
-    // UI handlers
     toggleBtn.addEventListener("click", () => scanning ? stopScan() : startScan());
     clearInputBtn.addEventListener("click", () => { inputEl.value = ""; inputEl.focus(); });
-    clearHistoryBtn.addEventListener("click", () => {
-      if (confirm("Na pewno wyczyścić historię?")) clearHistory();
+    clearHistoryBtn.addEventListener("click", () => { if (confirm("Na pewno wyczyścić historię?")) clearHistory(); });
+    clearRefBtn.addEventListener("click", () => { if (confirm("Usunąć zapisany wzorzec?")) clearRef(); });
+    applyManualRefBtn.addEventListener("click", () => {
+      const v = inputEl.value.trim();
+      if (!v) { alert("Wpisz wartość wzorca."); return; }
+      setRef(v);
+      flash("#00c853", 200);
+      beep(150, 800);
+      statusEl.textContent = `✅ Ustawiono wzorzec z wpisu: ${v}`;
+    });
+    scanRefBtn.addEventListener("click", async () => {
+      settingRefMode = true;
+      flash("#2962ff", 300);
+      statusEl.textContent = "Tryb ustawiania wzorca: zeskanuj kod referencyjny…";
     });
 
-    // Autostart skanowania po załadowaniu
     window.addEventListener("load", async () => {
+      updateRefUI();
       renderHistory();
       await startScan();
-      // rejestracja service workera
       if ('serviceWorker' in navigator) {
         try { await navigator.serviceWorker.register('sw.js'); } catch(_) {}
       }

@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'qr-ok-nok-v1';
+const CACHE_NAME = 'qr-ok-nok-v2';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -24,7 +24,6 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Cache-first for same-origin
   if (url.origin === location.origin) {
     event.respondWith(
       caches.match(event.request).then(resp => resp || fetch(event.request))
@@ -32,7 +31,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first with fallback to cache for external library (e.g., unpkg)
   event.respondWith(
     fetch(event.request).then(resp => {
       const copy = resp.clone();
