@@ -1,41 +1,10 @@
 
-const CACHE_NAME = 'qr-ok-nok-v2';
-const CORE_ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon-512.png'
-];
-
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS))
-  );
-});
-
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(
-      keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-    ))
-  );
-});
-
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-
-  if (url.origin === location.origin) {
-    event.respondWith(
-      caches.match(event.request).then(resp => resp || fetch(event.request))
-    );
-    return;
-  }
-
-  event.respondWith(
-    fetch(event.request).then(resp => {
-      const copy = resp.clone();
-      caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
-      return resp;
-    }).catch(() => caches.match(event.request))
-  );
+const CACHE='qrnok-v3';
+const ASSETS=['./','./index.html','./manifest.json','./icon-512.png'];
+self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))) });
+self.addEventListener('fetch',e=>{
+  const url=new URL(e.request.url);
+  if(url.origin===location.origin){ e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))); return; }
+  e.respondWith(fetch(e.request).then(resp=>{ const copy=resp.clone(); caches.open(CACHE).then(c=>c.put(e.request,copy)); return resp; }).catch(()=>caches.match(e.request)));
 });

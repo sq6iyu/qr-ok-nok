@@ -1,222 +1,199 @@
-
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>QR OK NOK</title>
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#000000">
-  <style>
-    :root { color-scheme: light dark; }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; padding: 0; background:#0e0e0e; color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    header { padding: 12px 16px; text-align:center; }
-    #app { display:flex; flex-direction:column; gap:12px; align-items:center; padding: 8px 12px 24px; }
-    .row { display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap; }
-    input[type="text"] { font-size:1.3rem; padding:10px 14px; width: 240px; border-radius:12px; border:1px solid #333; background:#181818; color:#fff; text-align:center; }
-    button { padding:10px 16px; border:none; border-radius:12px; background:#2a2a2a; color:#fff; font-size:1rem; }
-    button.secondary { background:#444; }
-    button.warn { background:#8a2a2a; }
-    button:active { transform:scale(0.98); }
-    #reader { width: min(92vw, 420px); margin: 0 auto; }
-    #status { font-weight:600; min-height: 1.6em; }
-    #refBox { background:#111; padding:8px 12px; border-radius:12px; border:1px solid #222; }
-    #refValue { font-weight:700; }
-    table { width:min(92vw, 680px); border-collapse: collapse; margin-top:8px; background:#111; }
-    th, td { border-bottom: 1px solid #222; padding: 8px; font-size: 0.95rem; text-align:left; }
-    th { position:sticky; top:0; background:#0f0f0f; }
-    .ok { color:#00e676; }
-    .nok { color:#ff5252; }
-    footer { text-align:center; opacity:0.7; font-size:12px; padding:8px; }
-  </style>
-  <script src="https://unpkg.com/html5-qrcode"></script>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>QRnok</title>
+<link rel="manifest" href="manifest.json"/>
+<meta name="theme-color" content="#ffffff"/>
+<style>
+:root{--bg:#fff;--fg:#111;--muted:#666;--primary:#d32f2f;--ok:#2e7d32;--nok:#c62828;--shadow:rgba(0,0,0,.08)}
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;user-select:none;display:flex;flex-direction:column}
+header{padding:10px 16px 6px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:center;position:sticky;top:0;background:var(--bg);z-index:10}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;letter-spacing:.4px}
+.logo .brand{color:var(--primary)}.miniqr{width:22px;height:22px;display:inline-block}
+.content{flex:1;display:flex;flex-direction:column;padding:10px 12px 0;gap:10px}
+.refbar{display:flex;gap:8px;align-items:center;justify-content:center}
+.refbar input{flex:1;max-width:420px;border:1px solid #ddd;padding:10px 12px;border-radius:12px;font-size:16px;background:#fafafa}
+.refbar button{border:1px solid #ddd;background:#f7f7f7;padding:10px 12px;border-radius:12px}
+.camera{position:relative;margin:0 auto;width:min(96vw,520px);aspect-ratio:3/4;border-radius:16px;overflow:hidden;box-shadow:0 6px 24px var(--shadow);background:#000}
+#reader{width:100%;height:100%}.frame{position:absolute;inset:0;pointer-events:none;border:4px solid rgba(0,0,0,0);border-radius:16px;transition:border-color .15s}
+.frame.ok{border-color:var(--ok)}.frame.nok{border-color:var(--nok)}
+.status{text-align:center;min-height:1.4em;font-weight:600;color:var(--muted)}
+.bottombar{border-top:1px solid #eee;background:var(--bg);display:flex;justify-content:space-around;padding:6px 4px env(safe-area-inset-bottom);position:sticky;bottom:0}
+.navbtn{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:72px;padding:6px 8px;border-radius:10px;text-decoration:none;color:inherit}
+.navbtn:active{background:#f3f3f3}.navbtn svg{width:24px;height:24px}.navbtn .label{font-size:12px;color:#222}
+dialog::backdrop{background:rgba(0,0,0,.3)}dialog{border:none;border-radius:16px;padding:0;width:min(92vw,640px);box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden}
+.modal-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #eee;background:#fff}.modal-head h3{margin:0;font-size:16px}
+.modal-body{padding:12px 14px;background:#fff;max-height:70vh;overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #f0f0f0;font-size:14px;text-align:left}th{position:sticky;top:0;background:#fff}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px}.pill.ok{background:#e8f5e9;color:var(--ok)}.pill.nok{background:#ffebee;color:var(--nok)}.muted{color:#777}
+</style>
+<script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 <body>
-  <header>
-    <h1 style="margin:6px 0;">QR OK NOK</h1>
-    <div style="font-size:0.95rem; opacity:0.8;">Porównaj zeskanowany QR ze wzorcem (zeskanuj lub wpisz ręcznie)</div>
-  </header>
-
-  <div id="app">
-    <div id="refBox" class="row" style="gap:12px;">
-      <div>Wzorzec: <span id="refValue">— brak —</span></div>
-      <button id="scanRefBtn" class="secondary" title="Zeskanuj kod wzorcowy">Ustaw wzorzec (skanuj)</button>
-      <button id="clearRefBtn" class="warn" title="Usuń kod wzorcowy" disabled>Usuń wzorzec</button>
-    </div>
-
-    <div class="row">
-      <input id="inputValue" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="Lub wpisz wzorzec ręcznie…">
-      <button id="applyManualRefBtn" class="secondary">Ustaw z wpisu</button>
-      <button id="clearInputBtn" title="Wyczyść">Wyczyść</button>
-      <button id="toggleBtn">Zatrzymaj skanowanie</button>
-    </div>
-
-    <div id="reader"></div>
-    <div id="status">Oczekiwanie na skan…</div>
-
-    <div style="width:min(92vw,680px);display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
-      <strong>Historia skanów (lokalnie)</strong>
-      <div class="row">
-        <button id="clearHistoryBtn">Wyczyść historię</button>
-      </div>
-    </div>
-    <div style="max-height: 40vh; overflow:auto; width:100%;">
-      <table id="historyTable" aria-label="Historia skanów">
-        <thead>
-          <tr>
-            <th style="width:26%;">Data i czas</th>
-            <th style="width:22%;">Wzorzec użyty</th>
-            <th style="width:30%;">Zeskanowana wartość</th>
-            <th style="width:22%;">Wynik</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
+<header>
+  <div class="logo" aria-label="QRnok">
+    <span class="brand">QRnok</span>
+    <svg class="miniqr" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="2" y="2" width="8" height="8" fill="#d32f2f" rx="1"/><rect x="4" y="4" width="4" height="4" fill="#fff" rx="1"/>
+      <rect x="14" y="2" width="8" height="8" fill="#d32f2f" rx="1"/><rect x="16" y="4" width="4" height="4" fill="#fff" rx="1"/>
+      <rect x="2" y="14" width="8" height="8" fill="#d32f2f" rx="1"/><rect x="4" y="16" width="4" height="4" fill="#fff" rx="1"/>
+    </svg>
   </div>
+</header>
+<main class="content">
+  <div class="refbar">
+    <input id="refInput" type="text" placeholder="Wzorzec — wpisz ręcznie lub ustaw skanem" inputmode="text" autocomplete="off"/>
+    <button id="setRefBtn" title="Ustaw wzorzec z wpisu">Ustaw</button>
+    <button id="scanRefBtn" title="Ustaw wzorzec skanem">Skan wzorca</button>
+  </div>
+  <section class="camera">
+    <div id="reader"></div>
+    <div id="frame" class="frame"></div>
+  </section>
+  <div id="status" class="status">Gotowe do skanowania…</div>
+</main>
+<nav class="bottombar" aria-label="Nawigacja">
+  <a class="navbtn" id="btnScan" href="javascript:void(0)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2" stroke-width="2" stroke-linecap="round"/></svg>
+    <span class="label">Skanuj</span>
+  </a>
+  <a class="navbtn" id="btnRef" href="javascript:void(0)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 4h16v6H4zM4 14h10v6H4zM18 14h2v6h-2z" stroke-width="2" stroke-linejoin="round"/></svg>
+    <span class="label">Wzorzec</span>
+  </a>
+  <a class="navbtn" id="btnHistory" href="javascript:void(0)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 8v5l3 3M3 3v5h5" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="13" r="8" stroke-width="2"/></svg>
+    <span class="label">Historia</span>
+  </a>
+  <a class="navbtn" id="btnSettings" href="javascript:void(0)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke-width="2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06A2 2 0 1 1 3.21 19.4l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H2a2 2 0 1 1 0-4h.09c.66 0 1.26-.38 1.54-.97Z" stroke-width="1.7"/></svg>
+    <span class="label">Ustawienia</span>
+  </a>
+</nav>
 
-  <footer>© QR OK NOK — działa offline po pierwszym uruchomieniu</footer>
+<dialog id="historyModal" aria-labelledby="hTitle">
+  <div class="modal-head">
+    <h3 id="hTitle">Historia</h3>
+    <button id="clearHistoryBtn" style="border:1px solid #eee;background:#fff;padding:8px 10px;border-radius:10px">Wyczyść</button>
+  </div>
+  <div class="modal-body">
+    <table>
+      <thead><tr><th>Data i czas</th><th>Wzorzec</th><th>Odczyt</th><th>Wynik</th></tr></thead>
+      <tbody id="historyBody"></tbody>
+    </table>
+  </div>
+</dialog>
 
-  <script>
-    function beep(duration = 200, frequency = 600, volume = 0.8) {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = frequency; gain.gain.value = volume;
-        osc.start();
-        setTimeout(()=>{ osc.stop(); ctx.close(); }, duration);
-      } catch(_) {}
-    }
-    const body = document.body;
-    function flash(color, duration = 300) {
-      const prev = body.style.backgroundColor;
-      body.style.backgroundColor = color;
-      setTimeout(()=> body.style.backgroundColor = prev || "#0e0e0e", duration);
-    }
+<dialog id="settingsModal" aria-labelledby="sTitle">
+  <div class="modal-head">
+    <h3 id="sTitle">Ustawienia</h3>
+    <span></span>
+  </div>
+  <div class="modal-body">
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <input type="checkbox" id="soundToggle" checked/> Dźwięk (OK/NOK)
+    </label>
+    <button id="resetAllBtn" style="border:1px solid #eee;background:#fff;padding:10px 12px;border-radius:10px">Reset danych</button>
+    <p class="muted" style="margin-top:8px;">Dane (wzorzec, historia) są zapisywane tylko lokalnie w przeglądarce.</p>
+  </div>
+</dialog>
 
-    const HISTORY_KEY = "qr_ok_nok_history_v2";
-    const REF_KEY = "qr_ok_nok_reference";
-    function loadHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch(_) { return []; } }
-    function saveHistory(hist) { localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(-500))); }
-    function addHistory(entry) { const hist = loadHistory(); hist.push(entry); saveHistory(hist); renderHistory(); }
-    function clearHistory() { localStorage.removeItem(HISTORY_KEY); renderHistory(); }
-    function getRef() { return localStorage.getItem(REF_KEY) || ""; }
-    function setRef(val) { if (val) localStorage.setItem(REF_KEY, val); updateRefUI(); }
-    function clearRef() { localStorage.removeItem(REF_KEY); updateRefUI(); }
-    function updateRefUI() {
-      const ref = getRef();
-      document.getElementById("refValue").textContent = ref ? ref : "— brak —";
-      document.getElementById("clearRefBtn").disabled = !ref;
-    }
-    function renderHistory() {
-      const tbody = document.querySelector("#historyTable tbody");
-      tbody.innerHTML = "";
-      const hist = loadHistory().slice().reverse();
-      for (const h of hist) {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${h.time}</td>
-          <td>${escapeHtml(h.ref)}</td>
-          <td>${escapeHtml(h.decoded)}</td>
-          <td class="${h.match ? 'ok' : 'nok'}">${h.match ? 'OK' : 'NOK'}</td>
-        `;
-        tbody.appendChild(tr);
-      }
-    }
-    function escapeHtml(s) { return String(s||"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+<script>
+if (screen.orientation && screen.orientation.lock) { screen.orientation.lock('portrait').catch(()=>{}); }
 
-    let html5QrCode = null;
-    let scanning = false;
-    let settingRefMode = false;
-    const statusEl = document.getElementById("status");
-    const inputEl = document.getElementById("inputValue");
-    const toggleBtn = document.getElementById("toggleBtn");
-    const clearInputBtn = document.getElementById("clearInputBtn");
-    const clearHistoryBtn = document.getElementById("clearHistoryBtn");
-    const scanRefBtn = document.getElementById("scanRefBtn");
-    const clearRefBtn = document.getElementById("clearRefBtn");
-    const applyManualRefBtn = document.getElementById("applyManualRefBtn");
+let soundOn = true;
+function beep(duration=150, frequency=1000, volume=0.9){
+  if(!soundOn) return;
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type='sine'; osc.frequency.value=frequency; gain.gain.value=volume;
+    osc.start(); setTimeout(()=>{ try{osc.stop();ctx.close();}catch(e){} }, duration);
+  }catch(e){}
+}
+function okBeep(){ beep(150, 1000, 0.9); }
+function nokBeep(){ beep(1500, 300, 0.9); }
 
-    async function startScan() {
-      try {
-        if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
-        const devices = await Html5Qrcode.getCameras();
-        if (!devices || !devices.length) throw new Error("Nie znaleziono kamery");
-        const back = devices.find(d => /back|rear|tył/i.test(d.label)) || devices[0];
-        await html5QrCode.start(back.id, { fps: 10, qrbox: 260 }, onScan);
-        scanning = true;
-        toggleBtn.textContent = "Zatrzymaj skanowanie";
-        statusEl.textContent = "Skanowanie aktywne — skieruj aparat na kod QR";
-      } catch (e) {
-        statusEl.textContent = "Błąd kamery: " + e;
-      }
-    }
-    async function stopScan() {
-      try { if (html5QrCode && scanning) await html5QrCode.stop(); } catch(_) {}
-      scanning = false;
-      toggleBtn.textContent = "Wznów skanowanie";
-      statusEl.textContent = "Skanowanie zatrzymane";
-    }
+const frame = document.getElementById('frame');
+function flashOK(){ frame.classList.remove('nok'); frame.classList.add('ok'); setTimeout(()=>frame.classList.remove('ok'), 220); }
+function flashNOK(){ frame.classList.remove('ok'); frame.classList.add('nok'); setTimeout(()=>frame.classList.remove('nok'), 1600); }
 
-    function onScan(decodedText) {
-      if (settingRefMode) {
-        setRef(decodedText);
-        flash("#00c853", 250);
-        beep(200, 900);
-        statusEl.textContent = `✅ Ustawiono wzorzec: ${decodedText}`;
-        settingRefMode = false;
-        return;
-      }
-      const ref = getRef() || inputEl.value.trim();
-      if (!ref) {
-        statusEl.textContent = "Ustaw wzorzec: zeskanuj lub wpisz ręcznie.";
-        flash("#ffb300", 300);
-        beep(120, 440);
-        return;
-      }
-      const match = decodedText === ref;
-      if (match) {
-        flash("#00c853", 250);
-        beep(200, 900);
-        statusEl.textContent = `✅ OK — zgodne (${decodedText})`;
-      } else {
-        flash("#d50000", 1500);
-        beep(1500, 300);
-        statusEl.textContent = `❌ NOK — niezgodne (QR: ${decodedText})`;
-      }
-      const now = new Date();
-      addHistory({ time: now.toLocaleString(), ref, decoded: decodedText, match });
-    }
+const REF_KEY='qrnok_ref_v1', HISTORY_KEY='qrnok_hist_v1';
+const refInput=document.getElementById('refInput');
+const setRefBtn=document.getElementById('setRefBtn');
+const scanRefBtn=document.getElementById('scanRefBtn');
+const statusEl=document.getElementById('status');
+const historyModal=document.getElementById('historyModal');
+const settingsModal=document.getElementById('settingsModal');
+const historyBody=document.getElementById('historyBody');
+const clearHistoryBtn=document.getElementById('clearHistoryBtn');
+const soundToggle=document.getElementById('soundToggle');
 
-    toggleBtn.addEventListener("click", () => scanning ? stopScan() : startScan());
-    clearInputBtn.addEventListener("click", () => { inputEl.value = ""; inputEl.focus(); });
-    clearHistoryBtn.addEventListener("click", () => { if (confirm("Na pewno wyczyścić historię?")) clearHistory(); });
-    clearRefBtn.addEventListener("click", () => { if (confirm("Usunąć zapisany wzorzec?")) clearRef(); });
-    applyManualRefBtn.addEventListener("click", () => {
-      const v = inputEl.value.trim();
-      if (!v) { alert("Wpisz wartość wzorca."); return; }
-      setRef(v);
-      flash("#00c853", 200);
-      beep(150, 800);
-      statusEl.textContent = `✅ Ustawiono wzorzec z wpisu: ${v}`;
-    });
-    scanRefBtn.addEventListener("click", async () => {
-      settingRefMode = true;
-      flash("#2962ff", 300);
-      statusEl.textContent = "Tryb ustawiania wzorca: zeskanuj kod referencyjny…";
-    });
+function getRef(){ return localStorage.getItem(REF_KEY) || ''; }
+function setRef(v){ if(v){ localStorage.setItem(REF_KEY, v); refInput.value = v; } }
+function clearRef(){ localStorage.removeItem(REF_KEY); refInput.value=''; }
+function loadHistory(){ try{return JSON.parse(localStorage.getItem(HISTORY_KEY))||[]}catch(_){return[]} }
+function saveHistory(h){ localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(-500))); }
+function pushHistory(entry){ const h=loadHistory(); h.push(entry); saveHistory(h); }
 
-    window.addEventListener("load", async () => {
-      updateRefUI();
-      renderHistory();
-      await startScan();
-      if ('serviceWorker' in navigator) {
-        try { await navigator.serviceWorker.register('sw.js'); } catch(_) {}
-      }
-    });
-  </script>
-</body>
-</html>
+function renderHistory(){
+  historyBody.innerHTML='';
+  const rows=loadHistory().slice().reverse();
+  for(const r of rows){
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${r.time}</td><td>${escapeHtml(r.ref)}</td><td>${escapeHtml(r.decoded)}</td><td>${r.match?'<span class="pill ok">OK</span>':'<span class="pill nok">NOK</span>'}</td>`;
+    historyBody.appendChild(tr);
+  }
+}
+function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+let html5QrCode=null, settingRefMode=false, scanning=false;
+
+async function startScan(){
+  try{
+    if(!html5QrCode) html5QrCode = new Html5Qrcode('reader');
+    const devices = await Html5Qrcode.getCameras();
+    if(!devices || !devices.length) throw new Error('Nie znaleziono kamery');
+    const back = devices.find(d=>/back|rear|tył/i.test(d.label)) || devices[0];
+    await html5QrCode.start(back.id, { fps: 10, qrbox: {width:240, height:240} }, onScan);
+    scanning = true; statusEl.textContent = 'Skanowanie aktywne';
+  }catch(e){ statusEl.textContent='Błąd kamery: '+e; }
+}
+async function stopScan(){ try{ if(html5QrCode && scanning) await html5QrCode.stop(); }catch(_){}
+  scanning=false; statusEl.textContent='Skanowanie zatrzymane'; }
+
+function onScan(decodedText){
+  if(settingRefMode){
+    setRef(decodedText); statusEl.textContent='Ustawiono wzorzec: '+decodedText; flashOK(); okBeep(); settingRefMode=false; return;
+  }
+  const ref = getRef() || refInput.value.trim();
+  if(!ref){ statusEl.textContent='Ustaw wzorzec (wpisz lub skanuj).'; frame.classList.remove('ok','nok'); return; }
+  const match = decodedText === ref;
+  const now = new Date().toLocaleString();
+  pushHistory({ time: now, ref, decoded: decodedText, match });
+  if(match){ statusEl.textContent='✅ Zgodny: '+decodedText; flashOK(); okBeep(); }
+  else { statusEl.textContent='❌ Niezgodny: '+decodedText; flashNOK(); nokBeep(); }
+}
+
+document.getElementById('btnScan').addEventListener('click', ()=>startScan());
+document.getElementById('btnRef').addEventListener('click', ()=>{ settingRefMode = true; statusEl.textContent='Tryb ustawiania wzorca – zeskanuj kod referencyjny…'; frame.classList.remove('ok','nok'); });
+document.getElementById('btnHistory').addEventListener('click', ()=>{ renderHistory(); historyModal.showModal(); });
+document.getElementById('btnSettings').addEventListener('click', ()=>{ settingsModal.showModal(); });
+
+setRefBtn.addEventListener('click', ()=>{ const v=refInput.value.trim(); if(!v){ alert('Wpisz wartość wzorca.'); return; } setRef(v); flashOK(); okBeep(); statusEl.textContent='Ustawiono wzorzec: '+v; });
+scanRefBtn.addEventListener('click', ()=>{ settingRefMode=true; statusEl.textContent='Tryb ustawiania wzorca – zeskanuj kod referencyjny…'; });
+
+clearHistoryBtn.addEventListener('click', ()=>{ if(confirm('Wyczyścić historię?')){ localStorage.removeItem(HISTORY_KEY); renderHistory(); } });
+soundToggle.addEventListener('change', ()=>{ soundOn = soundToggle.checked; });
+
+window.addEventListener('load', async ()=>{
+  refInput.value = getRef();
+  soundOn = true; soundToggle.checked = true;
+  await startScan();
+  if('serviceWorker' in navigator){ try{ await navigator.serviceWorker.register('sw.js'); }catch(e){} }
+});
+</script>
+</body></html>
