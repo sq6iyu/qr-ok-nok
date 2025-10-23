@@ -1,0 +1,203 @@
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>QR OK NOK</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#000000">
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; padding: 0; background:#0e0e0e; color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    header { padding: 12px 16px; text-align:center; }
+    #app { display:flex; flex-direction:column; gap:12px; align-items:center; padding: 8px 12px 24px; }
+    .row { display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap; }
+    input[type="text"] { font-size:1.3rem; padding:10px 14px; width: 240px; border-radius:12px; border:1px solid #333; background:#181818; color:#fff; text-align:center; }
+    button { padding:10px 16px; border:none; border-radius:12px; background:#2a2a2a; color:#fff; font-size:1rem; }
+    button:active { transform:scale(0.98); }
+    #reader { width: min(92vw, 420px); margin: 0 auto; }
+    #status { font-weight:600; min-height: 1.6em; }
+    table { width:min(92vw, 640px); border-collapse: collapse; margin-top:8px; background:#111; }
+    th, td { border-bottom: 1px solid #222; padding: 8px; font-size: 0.95rem; text-align:left; }
+    th { position:sticky; top:0; background:#0f0f0f; }
+    .ok { color:#00e676; }
+    .nok { color:#ff5252; }
+    footer { text-align:center; opacity:0.7; font-size:12px; padding:8px; }
+  </style>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body>
+  <header>
+    <h1 style="margin:6px 0;">QR OK NOK</h1>
+    <div style="font-size:0.95rem; opacity:0.8;">Porównaj zeskanowany QR z numerem wpisanym poniżej</div>
+  </header>
+
+  <div id="app">
+    <div class="row">
+      <input id="inputValue" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="Wpisz numer...">
+      <button id="clearInputBtn" title="Wyczyść">Wyczyść</button>
+      <button id="toggleBtn">Zatrzymaj skanowanie</button>
+    </div>
+
+    <div id="reader"></div>
+    <div id="status">Oczekiwanie na skan…</div>
+
+    <div style="width:min(92vw,640px);display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+      <strong>Historia skanów (lokalnie)</strong>
+      <div class="row">
+        <button id="clearHistoryBtn">Wyczyść historię</button>
+      </div>
+    </div>
+    <div style="max-height: 40vh; overflow:auto; width:100%;">
+      <table id="historyTable" aria-label="Historia skanów">
+        <thead>
+          <tr>
+            <th style="width:26%;">Data i czas</th>
+            <th style="width:22%;">Wpisany numer</th>
+            <th style="width:30%;">Zeskanowana wartość</th>
+            <th style="width:22%;">Wynik</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>© QR OK NOK — działa offline po pierwszym uruchomieniu</footer>
+
+  <script>
+    // ====== UTIL: dźwięk + flash ======
+    function beep(duration = 200, frequency = 600, volume = 0.8) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = frequency; gain.gain.value = volume;
+        osc.start();
+        setTimeout(()=>{ osc.stop(); ctx.close(); }, duration);
+      } catch(_) {}
+    }
+    const body = document.body;
+    function flash(color, duration = 300) {
+      const prev = body.style.backgroundColor;
+      body.style.backgroundColor = color;
+      setTimeout(()=> body.style.backgroundColor = prev || "#0e0e0e", duration);
+    }
+
+    // ====== Historia w localStorage ======
+    const HISTORY_KEY = "qr_ok_nok_history_v1";
+    function loadHistory() {
+      try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+      catch(_) { return []; }
+    }
+    function saveHistory(hist) {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(-500))); // limit 500 wpisów
+    }
+    function addHistory(entry) {
+      const hist = loadHistory();
+      hist.push(entry);
+      saveHistory(hist);
+      renderHistory();
+    }
+    function clearHistory() {
+      localStorage.removeItem(HISTORY_KEY);
+      renderHistory();
+    }
+    function renderHistory() {
+      const tbody = document.querySelector("#historyTable tbody");
+      tbody.innerHTML = "";
+      const hist = loadHistory().slice().reverse(); // najnowsze na górze
+      for (const h of hist) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${h.time}</td>
+          <td>${escapeHtml(h.inputValue)}</td>
+          <td>${escapeHtml(h.decoded)}</td>
+          <td class="${h.match ? 'ok' : 'nok'}">${h.match ? 'OK' : 'NOK'}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+
+    // ====== QR skanowanie ======
+    let html5QrCode = null;
+    let scanning = false;
+    const statusEl = document.getElementById("status");
+    const inputEl = document.getElementById("inputValue");
+    const toggleBtn = document.getElementById("toggleBtn");
+    const clearInputBtn = document.getElementById("clearInputBtn");
+    const clearHistoryBtn = document.getElementById("clearHistoryBtn");
+
+    async function startScan() {
+      try {
+        if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
+        const devices = await Html5Qrcode.getCameras();
+        if (!devices || !devices.length) throw new Error("Nie znaleziono kamery");
+        // wybierz tylną jeśli dostępna
+        const back = devices.find(d => /back|rear|tył/i.test(d.label)) || devices[0];
+        await html5QrCode.start(back.id, { fps: 10, qrbox: 260 }, onScan);
+        scanning = true;
+        toggleBtn.textContent = "Zatrzymaj skanowanie";
+        statusEl.textContent = "Skanowanie aktywne — skieruj aparat na kod QR";
+      } catch (e) {
+        statusEl.textContent = "Błąd kamery: " + e;
+      }
+    }
+    async function stopScan() {
+      try {
+        if (html5QrCode && scanning) await html5QrCode.stop();
+      } catch(_) {}
+      scanning = false;
+      toggleBtn.textContent = "Wznów skanowanie";
+      statusEl.textContent = "Skanowanie zatrzymane";
+    }
+
+    function onScan(decodedText) {
+      const input = inputEl.value.trim();
+      if (!input) {
+        statusEl.textContent = "Wpisz numer przed skanowaniem!";
+        flash("#ffb300", 300);
+        beep(120, 440);
+        return;
+      }
+      const match = decodedText === input;
+      if (match) {
+        flash("#00c853", 250);
+        beep(200, 900);
+        statusEl.textContent = `✅ OK — zgodne (${decodedText})`;
+      } else {
+        flash("#d50000", 1500);
+        beep(1500, 300);
+        statusEl.textContent = `❌ NOK — niezgodne (QR: ${decodedText})`;
+      }
+      // dodaj do historii
+      const now = new Date();
+      const time = now.toLocaleString();
+      addHistory({ time, inputValue: input, decoded: decodedText, match });
+    }
+
+    // UI handlers
+    toggleBtn.addEventListener("click", () => scanning ? stopScan() : startScan());
+    clearInputBtn.addEventListener("click", () => { inputEl.value = ""; inputEl.focus(); });
+    clearHistoryBtn.addEventListener("click", () => {
+      if (confirm("Na pewno wyczyścić historię?")) clearHistory();
+    });
+
+    // Autostart skanowania po załadowaniu
+    window.addEventListener("load", async () => {
+      renderHistory();
+      await startScan();
+      // rejestracja service workera
+      if ('serviceWorker' in navigator) {
+        try { await navigator.serviceWorker.register('sw.js'); } catch(_) {}
+      }
+    });
+  </script>
+</body>
+</html>
