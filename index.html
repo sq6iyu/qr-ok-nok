@@ -1,11 +1,13 @@
 <!DOCTYPE html>
-<html lang="pl">
-<head>
+<html lang="pl"><head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>QRnok</title>
 <link rel="manifest" href="manifest.json"/>
 <meta name="theme-color" content="#ffffff"/>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="white">
+<link rel="apple-touch-icon" href="icon-512.png">
 <style>
 :root{--bg:#fff;--fg:#111;--muted:#666;--primary:#d32f2f;--ok:#2e7d32;--nok:#c62828;--shadow:rgba(0,0,0,.08)}
 *{box-sizing:border-box}html,body{height:100%;margin:0}body{background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;user-select:none;display:flex;flex-direction:column}
@@ -27,6 +29,7 @@ dialog::backdrop{background:rgba(0,0,0,.3)}dialog{border:none;border-radius:16px
 .modal-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #eee;background:#fff}.modal-head h3{margin:0;font-size:16px}
 .modal-body{padding:12px 14px;background:#fff;max-height:70vh;overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #f0f0f0;font-size:14px;text-align:left}th{position:sticky;top:0;background:#fff}
 .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px}.pill.ok{background:#e8f5e9;color:var(--ok)}.pill.nok{background:#ffebee;color:var(--nok)}.muted{color:#777}
+.err{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#ffebee;color:#b71c1c;border:1px solid #ffcdd2;padding:10px 14px;border-radius:10px;box-shadow:0 6px 24px var(--shadow);display:none;z-index:100}
 </style>
 <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
@@ -96,11 +99,28 @@ dialog::backdrop{background:rgba(0,0,0,.3)}dialog{border:none;border-radius:16px
     </label>
     <button id="resetAllBtn" style="border:1px solid #eee;background:#fff;padding:10px 12px;border-radius:10px">Reset danych</button>
     <p class="muted" style="margin-top:8px;">Dane (wzorzec, historia) są zapisywane tylko lokalnie w przeglądarce.</p>
+    <p class="muted" style="margin-top:4px;">Jeśli kamera nie działa, sprawdź uprawnienia: Ustawienia → Przeglądarka → Aparat → Zezwalaj.</p>
   </div>
 </dialog>
 
+<div id="err" class="err" role="alert">Nie można uruchomić kamery. Sprawdź uprawnienia przeglądarki.</div>
+
 <script>
 if (screen.orientation && screen.orientation.lock) { screen.orientation.lock('portrait').catch(()=>{}); }
+
+let audioPrimed = false;
+function primeAudio(){
+  if(audioPrimed) return;
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination); gain.gain.value=0.0001;
+    osc.start(); setTimeout(()=>{ try{osc.stop();ctx.close();}catch(e){} }, 5);
+    audioPrimed = true;
+  }catch(e){}
+}
+document.addEventListener('touchstart', primeAudio, {once:true});
+document.addEventListener('click', primeAudio, {once:true});
 
 let soundOn = true;
 function beep(duration=150, frequency=1000, volume=0.9){
@@ -131,6 +151,7 @@ const settingsModal=document.getElementById('settingsModal');
 const historyBody=document.getElementById('historyBody');
 const clearHistoryBtn=document.getElementById('clearHistoryBtn');
 const soundToggle=document.getElementById('soundToggle');
+const errBox=document.getElementById('err');
 
 function getRef(){ return localStorage.getItem(REF_KEY) || ''; }
 function setRef(v){ if(v){ localStorage.setItem(REF_KEY, v); refInput.value = v; } }
@@ -154,13 +175,32 @@ let html5QrCode=null, settingRefMode=false, scanning=false;
 
 async function startScan(){
   try{
+    errBox.style.display='none';
     if(!html5QrCode) html5QrCode = new Html5Qrcode('reader');
-    const devices = await Html5Qrcode.getCameras();
-    if(!devices || !devices.length) throw new Error('Nie znaleziono kamery');
-    const back = devices.find(d=>/back|rear|tył/i.test(d.label)) || devices[0];
-    await html5QrCode.start(back.id, { fps: 10, qrbox: {width:240, height:240} }, onScan);
+    // Enforce back camera constraints
+    const constraints = { facingMode: { exact: 'environment' } };
+    await html5QrCode.start(
+      constraints,
+      { fps: 10, qrbox: {width:240, height:240} },
+      onScan
+    ).catch(async (e)=>{
+      try {
+        await html5QrCode.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: {width:240, height:240} },
+          onScan
+        );
+      } catch (e2) {
+        const devices = await Html5Qrcode.getCameras();
+        if(!devices || !devices.length) throw new Error('Nie znaleziono kamery');
+        await html5QrCode.start(devices[0].id, { fps: 10, qrbox: {width:240, height:240} }, onScan);
+      }
+    });
     scanning = true; statusEl.textContent = 'Skanowanie aktywne';
-  }catch(e){ statusEl.textContent='Błąd kamery: '+e; }
+  }catch(e){
+    statusEl.textContent='Błąd kamery';
+    errBox.style.display='block';
+  }
 }
 async function stopScan(){ try{ if(html5QrCode && scanning) await html5QrCode.stop(); }catch(_){}
   scanning=false; statusEl.textContent='Skanowanie zatrzymane'; }
@@ -178,7 +218,7 @@ function onScan(decodedText){
   else { statusEl.textContent='❌ Niezgodny: '+decodedText; flashNOK(); nokBeep(); }
 }
 
-document.getElementById('btnScan').addEventListener('click', ()=>startScan());
+document.getElementById('btnScan').addEventListener('click', ()=>{ primeAudio(); startScan(); });
 document.getElementById('btnRef').addEventListener('click', ()=>{ settingRefMode = true; statusEl.textContent='Tryb ustawiania wzorca – zeskanuj kod referencyjny…'; frame.classList.remove('ok','nok'); });
 document.getElementById('btnHistory').addEventListener('click', ()=>{ renderHistory(); historyModal.showModal(); });
 document.getElementById('btnSettings').addEventListener('click', ()=>{ settingsModal.showModal(); });
